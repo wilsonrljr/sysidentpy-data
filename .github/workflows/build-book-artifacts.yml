@@ -1,0 +1,89 @@
+name: Build Book Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      sysidentpy_ref:
+        description: "SysIdentPy branch, tag, or commit to build from"
+        required: false
+        default: main
+  repository_dispatch:
+    types: [build-book-artifacts]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve SysIdentPy ref
+        id: source-ref
+        env:
+          DISPATCH_REF: ${{ github.event.client_payload.sysidentpy_ref }}
+          WORKFLOW_INPUT_REF: ${{ github.event.inputs.sysidentpy_ref }}
+        run: |
+          ref="${DISPATCH_REF:-${WORKFLOW_INPUT_REF:-main}}"
+          echo "sysidentpy_ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout sysidentpy-data
+        uses: actions/checkout@v4
+        with:
+          path: sysidentpy-data
+
+      - name: Checkout SysIdentPy source
+        uses: actions/checkout@v4
+        with:
+          repository: wilsonrljr/sysidentpy
+          ref: ${{ steps.source-ref.outputs.sysidentpy_ref }}
+          path: sysidentpy
+
+      - name: Install Pandoc and LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pandoc \
+            texlive-fonts-recommended \
+            texlive-latex-extra \
+            texlive-latex-recommended \
+            texlive-xetex
+
+      - name: Build book artifacts
+        run: |
+          python sysidentpy-data/scripts/build_book_artifacts.py \
+            --source sysidentpy \
+            --output sysidentpy-data/dist/book \
+            --language all
+
+      - name: Validate generated artifacts
+        run: |
+          cd sysidentpy-data
+          test -s dist/book/Nonlinear_System_Identification_Theory_and_Practice_With_SysIdentPy_Wilson_R_L_Junior.pdf
+          test -s dist/book/Nonlinear_System_Identification_Theory_and_Practice_With_SysIdentPy_Wilson_R_L_Junior.epub
+          test -s dist/book/Identificacao_de_Sistemas_Nao_Lineares_e_Previsao_Teoria_e_Pratica_Com_SysIdentPy_Wilson_R_L_Junior.pdf
+          test -s dist/book/Identificacao_de_Sistemas_Nao_Lineares_e_Previsao_Teoria_e_Pratica_Com_SysIdentPy_Wilson_R_L_Junior.epub
+          python -m zipfile -t dist/book/Nonlinear_System_Identification_Theory_and_Practice_With_SysIdentPy_Wilson_R_L_Junior.epub
+          python -m zipfile -t dist/book/Identificacao_de_Sistemas_Nao_Lineares_e_Previsao_Teoria_e_Pratica_Com_SysIdentPy_Wilson_R_L_Junior.epub
+          python -m json.tool dist/book/book-manifest.json >/dev/null
+
+      - name: Publish latest book release assets
+        working-directory: sysidentpy-data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYSIDENTPY_REF: ${{ steps.source-ref.outputs.sysidentpy_ref }}
+        run: |
+          title="Latest SysIdentPy book artifacts"
+          notes="Automated PDF and EPUB generated from wilsonrljr/sysidentpy@$SYSIDENTPY_REF."
+          if gh release view book-latest >/dev/null 2>&1; then
+            gh release edit book-latest --title "$title" --notes "$notes"
+          else
+            gh release create book-latest --title "$title" --notes "$notes"
+          fi
+          gh release upload book-latest \
+            dist/book/Nonlinear_System_Identification_Theory_and_Practice_With_SysIdentPy_Wilson_R_L_Junior.pdf \
+            dist/book/Nonlinear_System_Identification_Theory_and_Practice_With_SysIdentPy_Wilson_R_L_Junior.epub \
+            dist/book/Identificacao_de_Sistemas_Nao_Lineares_e_Previsao_Teoria_e_Pratica_Com_SysIdentPy_Wilson_R_L_Junior.pdf \
+            dist/book/Identificacao_de_Sistemas_Nao_Lineares_e_Previsao_Teoria_e_Pratica_Com_SysIdentPy_Wilson_R_L_Junior.epub \
+            dist/book/book-manifest.json \
+            --clobber
