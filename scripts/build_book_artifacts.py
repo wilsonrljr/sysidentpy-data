@@ -15,6 +15,7 @@ from urllib.parse import quote, unquote
 
 BOOK_AUTHOR = "Wilson R. L. Junior"
 COVER_IMAGE = "book/assets/Nonlinear_System_identification.png"
+MATH_FILTER = Path(__file__).resolve().parent / "normalize_book_math.lua"
 CHAPTERS = (
     "0-Preface.md",
     "0.1-Contents.md",
@@ -62,7 +63,6 @@ DOWNLOAD_SECTION_RE = re.compile(
     re.DOTALL,
 )
 MKDOCS_ATTR_RE = re.compile(r"\)\{:[^}\n]+\}")
-LATEX_TAG_RE = re.compile(r"\\tag\{([^}]+)\}")
 GITHUB_ASSET_RE = re.compile(
     r"https://github\.com/wilsonrljr/sysidentpy-data/blob/[^/]+/"
     r"book/assets/([^)\n?]+)(?:\?raw=true)?"
@@ -191,7 +191,6 @@ def sanitize_markdown(markdown: str) -> str:
     markdown = markdown.replace("\t", "    ")
     markdown = markdown.replace("\u200b", "")
     markdown = markdown.replace("\u00a0", " ")
-    markdown = LATEX_TAG_RE.sub(r"\\qquad\\text{(\1)}", markdown)
     markdown = MKDOCS_ATTR_RE.sub(")", markdown)
     markdown = GITHUB_ASSET_RE.sub(rewrite_asset_url, markdown)
     markdown = RAW_ASSET_RE.sub(rewrite_asset_url, markdown)
@@ -271,6 +270,7 @@ def run_pandoc(
         "pandoc",
         str(markdown),
         "--from=markdown+tex_math_dollars+pipe_tables+raw_html",
+        f"--lua-filter={MATH_FILTER}",
         f"--resource-path={data_root}{os.pathsep}{book_dir}",
         f"--metadata=title:{title}",
         f"--metadata=author:{BOOK_AUTHOR}",

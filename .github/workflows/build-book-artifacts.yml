@@ -39,11 +39,15 @@ jobs:
           ref: ${{ steps.source-ref.outputs.sysidentpy_ref }}
           path: sysidentpy
 
-      - name: Install Pandoc and LaTeX
+      - name: Set up Pandoc
+        uses: pandoc/actions/setup@v1
+        with:
+          version: "3.10"
+
+      - name: Install LaTeX
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            pandoc \
             lmodern \
             texlive-fonts-recommended \
             texlive-latex-extra \
